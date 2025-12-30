@@ -1,0 +1,9 @@
+pages = [
+"main.toml",
+"vscode.toml",
+]
+
+default = "main"
+
+brightness = 10
+

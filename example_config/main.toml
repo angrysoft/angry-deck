@@ -1,0 +1,47 @@
+name =  "main"
+[[button]]
+index =  0
+
+[button.label]
+text = "Up"
+font_size = 10
+font_color = "#FFFFFF"
+
+[button.icon]
+file = "test.png"
+
+[button.action]
+type = "exec"
+value = [
+  "volume.sh",
+  "up"
+]
+
+[[button]]
+index = 4
+
+[button.label]
+text = "Down"
+font_size = 10
+font_color = "#FFFFFF"
+
+[button.icon]
+file: "test.png"
+
+[button.action]
+type = "exec"
+value = [
+  "volume.sh",
+  "down"
+]
+
+[[button]]
+index = 1
+[button.icon]
+file =  "vscode.png"
+fill = "#FF0000"
+[button.action]
+type = "set_page"
+value = [
+  "vscode"
+]
