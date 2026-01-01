@@ -1,6 +1,10 @@
-use std::fs::{self, File};
-use std::io::Read;
+use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+mod key_img;
+use image::{DynamicImage, RgbImage, imageops};
+use key_img::KeyImg;
 
 #[derive(Debug)]
 pub struct DeckDevice {
@@ -9,15 +13,16 @@ pub struct DeckDevice {
     pub product: String,
     pub serial: String,
     pub path: PathBuf,
-    key_state_offset: usize,
-    keys: usize,
+    pub key_state_offset: usize,
+    pub keys: usize,
+    pub pixel_width: u32,
+    pub pixel_height: u32,
+    pub type_name: String,
     /*
     id: String,
     columns: u8,
     rows: u8,
     keys: u8,
-    pixel_width: u16,
-    pixel_height: u16,
     dpi: u16,
     padding : u8,
     */
@@ -83,6 +88,17 @@ impl DeckDevice {
 
     fn match_device(_pid: &str, sys_path: &Path) -> Option<Self> {
         // Match known Elgato Stream Deck VID/PID combinations
+        let full_path = sys_path.canonicalize().unwrap();
+        let dev_path = match DeckDevice::find_dev_path(&full_path) {
+            Some(p) => {
+                println!("Device path found: {:?}", p);
+                Path::new("/dev").join(p.file_name().unwrap())
+            }
+            None => {
+                panic!("Could not find device path for Stream Deck Neo.");
+            }
+        };
+
         match _pid {
             USB_PID_STREAMDECK_MINI => None,
             USB_PID_STREAMDECK_MINI_MK2 => None,
@@ -93,16 +109,6 @@ impl DeckDevice {
             USB_PID_STREAMDECK_MK2_V2 => None,
             USB_PID_STREAMDECK_NEO => {
                 println!("Stream Deck Neo device detected.");
-                let full_path = sys_path.canonicalize().unwrap();
-                let dev_path = match DeckDevice::find_dev_path(&full_path) {
-                    Some(p) => {
-                        println!("Device path found: {:?}", p);
-                        Path::new("/dev").join(p.file_name().unwrap())
-                    }
-                    None => {
-                        panic!("Could not find device path for Stream Deck Neo.");
-                    }
-                };
 
                 Some(DeckDevice {
                     sys_fs: full_path.clone(),
@@ -115,6 +121,9 @@ impl DeckDevice {
                     path: dev_path,
                     key_state_offset: 4,
                     keys: 10,
+                    pixel_width: 96,
+                    pixel_height: 96,
+                    type_name: "jpg".to_string(),
                 })
             }
             USB_PID_STREAMDECK_ORIGINAL => None,
@@ -155,6 +164,12 @@ impl DeckDevice {
         None
     }
 
+    pub fn write_to_device(&self, _data: &[u8]) {
+        let mut file = File::create(&self.path).expect("Failed to open device file for writing");
+        file.write_all(_data)
+            .expect("Failed to write data to device");
+    }
+
     fn read_line_from_file(path: &Path) -> Option<String> {
         if path.exists() {
             match fs::read_to_string(path) {
@@ -166,37 +181,36 @@ impl DeckDevice {
         }
     }
 
-    pub fn listen_events(&self) {
-        println!(
-            "Listening for events on device: {} - {}",
-            self.manufacturer, self.product
-        );
-        let mut file = File::open(&self.path).expect("Failed to open device file");
-        let mut buffer = [0u8; 64];
-        let mut button_states = vec![0u8; self.keys];
+    pub fn clear(&self) {
+        let black_image = KeyImg::new_black_image(self.pixel_width, self.pixel_height);
+        for key_index in 0..self.keys {
+            self.set_image(key_index as u8, black_image.clone());
+        }
+    }
 
-        loop {
-            match file.read(&mut buffer) {
-                Ok(bytes_read) => {
-                    if bytes_read > 0 {
-                        for i in 0..self.keys {
-                            let state = buffer[self.key_state_offset + i];
-                            if state != button_states[i] {
-                                button_states[i] = state;
-                                if state != 0 {
-                                    println!("Button {} pressed", i);
-                                } else {
-                                    println!("Button {} released", i);
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error reading from device: {}", e);
-                    break;
-                }
-            }
+    pub fn set_image(&self, key_index: u8, img: RgbImage) {
+        // 1 resize if necessary
+        let img = self.resize_image(&img);
+        // 2 convert
+        // 3 create packet
+        // 4 send to device
+        // self.write_to_device(&packet);
+        println!("Setting image for key {}", key_index);
+    }
+
+    // fn 
+
+    fn resize_image(&self, img: &RgbImage) -> RgbImage {
+        if img.width() > self.pixel_width || img.height() > self.pixel_height {
+            DynamicImage::ImageRgb8(img.clone())
+                .resize_to_fill(
+                    self.pixel_width,
+                    self.pixel_height,
+                    imageops::FilterType::Lanczos3,
+                )
+                .to_rgb8()
+        } else {
+            img.clone()
         }
     }
 }

@@ -18,6 +18,7 @@ fn main() {
     }
     let mut deck = Deck::new(config.to_str().unwrap());
     deck.find_device();
-    deck.listen();
+    deck.load_pages();
     deck.show_config();
+    deck.listen();
 }
